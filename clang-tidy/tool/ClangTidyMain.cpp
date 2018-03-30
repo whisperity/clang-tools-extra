@@ -339,10 +339,8 @@ static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider() {
 
 llvm::IntrusiveRefCntPtr<vfs::FileSystem>
 getVfsOverlayFromFile(const std::string &OverlayFile) {
-  llvm::IntrusiveRefCntPtr<vfs::OverlayFileSystem> OverlayFS(
-      new vfs::OverlayFileSystem(vfs::getRealFileSystem()));
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> Buffer =
-      OverlayFS->getBufferForFile(OverlayFile);
+      vfs::getRealFileSystem()->getBufferForFile(OverlayFile);
   if (!Buffer) {
     llvm::errs() << "Can't load virtual filesystem overlay file '"
                  << OverlayFile << "': " << Buffer.getError().message()
@@ -357,8 +355,7 @@ getVfsOverlayFromFile(const std::string &OverlayFile) {
                  << OverlayFile << "'.\n";
     return nullptr;
   }
-  OverlayFS->pushOverlay(FS);
-  return OverlayFS;
+  return FS;
 }
 
 static int clangTidyMain(int argc, const char **argv) {
@@ -432,10 +429,10 @@ static int clangTidyMain(int argc, const char **argv) {
     llvm::cl::PrintHelpMessage(/*Hidden=*/false, /*Categorized=*/true);
     return 1;
   }
-  llvm::IntrusiveRefCntPtr<vfs::FileSystem> BaseFS(
-      VfsOverlay.empty() ? vfs::getRealFileSystem()
+  llvm::IntrusiveRefCntPtr<vfs::FileSystem> VirtualFileSystem(
+      VfsOverlay.empty() ? nullptr
                          : getVfsOverlayFromFile(VfsOverlay));
-  if (!BaseFS)
+  if (!VfsOverlay.empty() && !VirtualFileSystem)
     return 1;
 
   ProfileData Profile;
@@ -445,8 +442,10 @@ static int clangTidyMain(int argc, const char **argv) {
   llvm::InitializeAllAsmParsers();
 
   ClangTidyContext Context(std::move(OwningOptionsProvider));
-  runClangTidy(Context, OptionsParser.getCompilations(), PathList, BaseFS,
-               EnableCheckProfile ? &Profile : nullptr);
+  ClangTool Tool(OptionsParser.getCompilations(), PathList,
+                 std::make_shared<PCHContainerOperations>(),
+                 vfs::createOverlayOnRealFilesystem(VirtualFileSystem));
+  runClangTidy(Context, Tool, EnableCheckProfile ? &Profile : nullptr);
   ArrayRef<ClangTidyError> Errors = Context.getErrors();
   bool FoundErrors =
       std::find_if(Errors.begin(), Errors.end(), [](const ClangTidyError &E) {
@@ -459,7 +458,7 @@ static int clangTidyMain(int argc, const char **argv) {
 
   // -fix-errors implies -fix.
   handleErrors(Context, (FixErrors || Fix) && !DisableFixes, WErrorCount,
-               BaseFS);
+               Tool);
 
   if (!ExportFixes.empty() && !Errors.empty()) {
     std::error_code EC;
