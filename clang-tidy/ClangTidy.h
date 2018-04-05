@@ -16,6 +16,7 @@
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Tooling/Refactoring.h"
+#include "clang/Tooling/Tooling.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
@@ -225,9 +226,7 @@ ClangTidyOptions::OptionMap getCheckOptions(const ClangTidyOptions &Options);
 /// \param Profile if provided, it enables check profile collection in
 /// MatchFinder, and will contain the result of the profile.
 void runClangTidy(clang::tidy::ClangTidyContext &Context,
-                  const tooling::CompilationDatabase &Compilations,
-                  ArrayRef<std::string> InputFiles,
-                  llvm::IntrusiveRefCntPtr<vfs::FileSystem> BaseFS,
+                  clang::tooling::ClangTool &Tool,
                   ProfileData *Profile = nullptr);
 
 // FIXME: This interface will need to be significantly extended to be useful.
@@ -238,7 +237,7 @@ void runClangTidy(clang::tidy::ClangTidyContext &Context,
 /// clang-format configuration file is found, the given \P FormatStyle is used.
 void handleErrors(ClangTidyContext &Context, bool Fix,
                   unsigned &WarningsAsErrorsCount,
-                  llvm::IntrusiveRefCntPtr<vfs::FileSystem> BaseFS);
+                  clang::tooling::ClangTool &Tool);
 
 /// \brief Serializes replacements into YAML and writes them to the specified
 /// output stream.

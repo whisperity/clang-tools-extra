@@ -16,6 +16,7 @@ target_link_libraries(clang-tidy
   clangAST
   clangASTMatchers
   clangBasic
+  clangFrontend
   clangTidy
   clangTidyAndroidModule
   clangTidyAbseilModule

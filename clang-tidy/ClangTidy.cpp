@@ -38,7 +38,6 @@
 #include "clang/Tooling/DiagnosticsYaml.h"
 #include "clang/Tooling/Refactoring.h"
 #include "clang/Tooling/ReplacementsYaml.h"
-#include "clang/Tooling/Tooling.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Signals.h"
 #include <algorithm>
@@ -89,9 +88,9 @@ private:
 
 class ErrorReporter {
 public:
-  ErrorReporter(ClangTidyContext &Context, bool ApplyFixes,
-                llvm::IntrusiveRefCntPtr<vfs::FileSystem> BaseFS)
-      : Files(FileSystemOptions(), BaseFS), DiagOpts(new DiagnosticOptions()),
+  ErrorReporter(ClangTidyContext &Context, bool ApplyFixes, ClangTool &Tool)
+      : Files(FileSystemOptions(), Tool.getFiles().getVirtualFileSystem()),
+        DiagOpts(new DiagnosticOptions()),
         DiagPrinter(new TextDiagnosticPrinter(llvm::outs(), &*DiagOpts)),
         Diags(IntrusiveRefCntPtr<DiagnosticIDs>(new DiagnosticIDs), &*DiagOpts,
               DiagPrinter),
@@ -474,13 +473,8 @@ ClangTidyOptions::OptionMap getCheckOptions(const ClangTidyOptions &Options) {
 }
 
 void runClangTidy(clang::tidy::ClangTidyContext &Context,
-                  const CompilationDatabase &Compilations,
-                  ArrayRef<std::string> InputFiles,
-                  llvm::IntrusiveRefCntPtr<vfs::FileSystem> BaseFS,
+                  ClangTool &Tool,
                   ProfileData *Profile) {
-  ClangTool Tool(Compilations, InputFiles,
-                 std::make_shared<PCHContainerOperations>(), BaseFS);
-
   // Add extra arguments passed by the clang-tidy command-line.
   ArgumentsAdjuster PerFileExtraArgumentsInserter =
       [&Context](const CommandLineArguments &Args, StringRef Filename) {
@@ -551,8 +545,8 @@ void runClangTidy(clang::tidy::ClangTidyContext &Context,
 
 void handleErrors(ClangTidyContext &Context, bool Fix,
                   unsigned &WarningsAsErrorsCount,
-                  llvm::IntrusiveRefCntPtr<vfs::FileSystem> BaseFS) {
-  ErrorReporter Reporter(Context, Fix, BaseFS);
+                  ClangTool &Tool) {
+  ErrorReporter Reporter(Context, Fix, Tool);
   vfs::FileSystem &FileSystem =
       *Reporter.getSourceManager().getFileManager().getVirtualFileSystem();
   auto InitialWorkingDir = FileSystem.getCurrentWorkingDirectory();
